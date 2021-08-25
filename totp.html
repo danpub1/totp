@@ -67,13 +67,11 @@ function bufToBase32(buf) {
   if (bits.length % 5 != 0) {
 	  bits += '0000'.substr(0, 5 - bits.length % 5)
   }
-  //console.log(bits.length + " bits: " + bits)
 
   var base32 = ''
   for (var ii = 0; ii < bits.length; ii += 5) {
 	  base32 += alphabet.substr(parseInt(bits.substr(ii, 5), 2), 1)
   }
-  //console.log(base32.length + " base32: " + base32)
   
   return base32;
 }
@@ -87,14 +85,12 @@ function base32ToHex(base32) {
 		  bits += lPad(val.toString(2), 5, '0')
 	  }
   }
-  //console.log(bits.length + "bits: " + bits)
   
   var hex = ''
   for (var ii = 0; ii + 7 < bits.length; ii += 8) {
 	  hex += lPad(parseInt(bits.substr(ii, 8), 2).toString(16),2,'0')
   }
 
-  //console.log(hex.length + "hex: " + hex)
   return hex
 }
 
@@ -166,8 +162,6 @@ function refreshSecret() {
 }
 
 function refresh() {
-  //console.log(document.getElementById('secret').value)
-  //console.log(bufToBase32(hexToBuf(base32ToHex(document.getElementById('secret').value))))
   const windowSize = parseInt(document.getElementById('windowSize').value, 10)
   const codeLen = parseInt(document.getElementById('codeLen').value, 10)
   const mac = document.getElementById('hmac').value
