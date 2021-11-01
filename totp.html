@@ -41,61 +41,56 @@
             <div class="footer">Based on <a href="https://gist.github.com/rafaelsq/e6a84d2f9b487917115362e39032d528">https://gist.github.com/rafaelsq/e6a84d2f9b487917115362e39032d528</a></div>
         <div>
         <script>
-var alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567abcdefghijklmnopqrstuvwxyz234567'
+var runes = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567abcdefghijklmnopqrstuvwxyz234567'
 
-function hexToBuf(hex) {
-  bytes = new Uint8Array(hex.length/2)
-  for (let c = 0; c < hex.length; c += 2) {
-	  bytes[c/2] = parseInt(hex.substr(c, 2), 16)
-  }
-  return bytes;
-}
-
-function lPad(str, len, pad) {
-  if (len + 1 >= str.length) {
-	  str = Array(len + 1 - str.length).join(pad) + str
-  }
-  return str
-}
-
-function bufToBase32(buf) {
-  var bits = ''
-  for (var ii = 0; ii < buf.length; ii++) {
-	  bits += lPad(buf[ii].toString(2), 8, '0')
-  }
-  
-  if (bits.length % 5 != 0) {
-	  bits += '0000'.substr(0, 5 - bits.length % 5)
-  }
-
-  var base32 = ''
-  for (var ii = 0; ii < bits.length; ii += 5) {
-	  base32 += alphabet.substr(parseInt(bits.substr(ii, 5), 2), 1)
-  }
-  
-  return base32;
-}
-
-function base32ToHex(base32) {
-
-  var bits = ''
-  for (var ii = 0; ii < base32.length; ii++) {
-	  var val = alphabet.indexOf(base32.charAt(ii)) % 32
-	  if (val >= 0) {
-		  bits += lPad(val.toString(2), 5, '0')
+function encodeBuf(buf) {
+   var encoded = ''
+   var bitCount = buf.length * 8;
+   var ii = 0;
+   for (ii = 0; ii < bitCount; ii += 5) {
+      switch (ii % 8) {
+	     case 0: encoded += runes[((buf[Math.floor(ii / 8)] >> 3) & 0x1F)]; break; // bits 3-7
+		 case 1: encoded += runes[((buf[Math.floor(ii / 8)] >> 2) & 0x1F)]; break; // bits 2-6
+		 case 2: encoded += runes[((buf[Math.floor(ii / 8)] >> 1) & 0x1F)]; break; // bits 1-5
+		 case 3: encoded += runes[((buf[Math.floor(ii / 8)] >> 0) & 0x1F)]; break; // bits 0-4
+		 case 4: encoded += runes[((buf[Math.floor(ii / 8)] & 0x0F) << 1) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 7) & 0x01) : 0)]; break; // bits 0-3 + bit 7
+		 case 5: encoded += runes[((buf[Math.floor(ii / 8)] & 0x07) << 2) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 6) & 0x03) : 0)]; break; // bits 0-2 + bit 6-7
+		 case 6: encoded += runes[((buf[Math.floor(ii / 8)] & 0x03) << 3) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 5) & 0x07) : 0)]; break; // bits 0-1 + bit 5-7
+		 case 7: encoded += runes[((buf[Math.floor(ii / 8)] & 0x01) << 4) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 4) & 0x0F) : 0)]; break; // bit 0 + bit 4-7
 	  }
-  }
-  
-  var hex = ''
-  for (var ii = 0; ii + 7 < bits.length; ii += 8) {
-	  hex += lPad(parseInt(bits.substr(ii, 8), 2).toString(16),2,'0')
-  }
+   }
+   
+   return encoded;
+}
 
-  return hex
+function decodeBuf(encoded) {
+   var bitCount = Math.floor(encoded.length * 5 / 8) * 8;
+   var buf = new Uint8Array(bitCount / 8);
+   for (ii = 0; ii < bitCount; ii += 8) {
+      var cc = Math.floor(ii/5)
+      switch (ii % 5) {
+	     case 0: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x1F) << 3) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1C) >> 2); break; // 5 & 3
+	     case 1: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x0F) << 4) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1E) >> 1); break; // 4 & 4
+	     case 2: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x07) << 5) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1F) >> 0); break; // 3 & 5
+	     case 3: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x03) << 6) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1F) << 1) | (((runes.indexOf(encoded[cc+2]) % 32) & 0x10) >> 4); break; // 2 & 5 & 1
+	     case 4: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x01) << 7) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1F) << 2) | (((runes.indexOf(encoded[cc+2]) % 32) & 0x18) >> 3); break; // 1 & 5 & 2
+	  }
+   }
+   return buf;
 }
 
 function getCounter(s) {
-  return lPad(Math.floor(s).toString(16), 16, '0')
+  var buf = new Uint8Array(8);
+  s = Math.floor(s)
+  buf[7] = Math.floor(s/1) & 0xFF;
+  buf[6] = Math.floor(s/256) & 0xFF;
+  buf[5] = Math.floor(s/(256*256)) & 0xFF;
+  buf[4] = Math.floor(s/(256*256*256)) & 0xFF;
+  buf[3] = Math.floor(s/(256*256*256*256)) & 0xFF;
+  buf[2] = Math.floor(s/(256*256*256*256*256)) & 0xFF;
+  buf[1] = Math.floor(s/(256*256*256*256*256*256)) & 0xFF;
+  buf[0] = Math.floor(s/(256*256*256*256*256*256*256)) & 0xFF;
+  return buf;
 }
 
 function getTimeCounter(windowSize) {
@@ -109,8 +104,8 @@ function getRemaining(windowSize) {
 }
 
 async function getOTP(secret, mac, codeLen, windowSize) {
-  const keyData = hexToBuf(base32ToHex(secret))
-  const data = hexToBuf(getTimeCounter(windowSize))
+  const keyData = decodeBuf(secret)
+  const data = getTimeCounter(windowSize)
   
   if (keyData.length != 0) {
 	  const key = await crypto.subtle.importKey('raw', keyData, {name: 'HMAC', hash: mac}, false, ['sign'])
@@ -118,8 +113,8 @@ async function getOTP(secret, mac, codeLen, windowSize) {
 
 	  var arr = new Uint8Array(signature)
 	  var offset = arr[arr.length - 1] & 0xf
-	  var binary = ((arr[offset] & 0x7f) << 24) | ((arr[offset + 1] & 0xff) << 16) | ((arr[offset + 2] & 0xff) << 8) | (arr[offset + 3] & 0xff)
-	  return lPad((binary % Math.pow(10, codeLen)).toString(), codeLen, '0')
+	  var binary = ((arr[offset] & 0x7f) << 24) | ((arr[offset + 1] & 0xff) << 16) | ((arr[offset + 2] & 0xff) << 8) | (arr[offset + 3] & 0xff);
+    return (binary % Math.pow(10, codeLen)).toString().padStart(codeLen, "0");
   } else {
 	  return '';
   }
@@ -128,7 +123,7 @@ async function getOTP(secret, mac, codeLen, windowSize) {
 function generateSecret() {
   var randBytes = new Uint8Array(20)        
   window.crypto.getRandomValues(randBytes)
-  document.getElementById('secret').value = bufToBase32(randBytes)
+  document.getElementById('secret').value = encodeBuf(randBytes)
 }
 
 function refreshSecret() {
