@@ -15,14 +15,15 @@
                 text-align: left; 
                 line-height: 1.30;
                 font-variant-ligatures: none;
-                width: 28em;
+                width: 32em;
             }
             .leader, .url { font-size: 0.875em; }
             .spacer { font-size: 0.625em; }
             .footer { font-size: 0.625em; }
             .title { margin-bottom:0; margin-top:0 }
             .label { display:inline-block; width: 7em; }
-            .longInput { width:24em; }
+            .longInput { width:28em; }
+            .secretInput { width:26em; }
             .shortInput { width: 4em; }
             .totpDisplay { font-family:'Fira Code','Fira Mono','Courier New',monospace; font-size: 26px; margin: 5px auto 0px auto; text-align: center; font-weight: bold; }
             .totpDisplayPartLeft { display: inline-block; padding-right: 0.7em; }
@@ -39,280 +40,354 @@
         </script>
     </head>
     <body>
-      <h2 class="title"><b>totp</b></h2>
-      <b class="leader">Time-based One-Time Password</b>
-      <div class="spacer">&nbsp;</div>
-      <div><b class="label">Issuer:</b> <input id="issuer" type="text" value="" class="longInput" /></div>
-      <div><b class="label">Account:</b> <input id="account" type="text" value="username" class="longInput" /></div>
-      <div><b class="label">Secret:</b> <input id="secret" type="text" value="" class="longInput" /></div>
-      <div><b class="label">HMAC:</b> <select name="hmac" id="hmac">
-          <option value="SHA-1">SHA-1</option>
-          <option value="SHA-256">SHA-256</option>
-          <option value="SHA-512">SHA-512</option>
-      </select></div>
-      <div><b class="label">Length:</b> <input id="codeLen" type="text" value="6" class="shortInput"/></div>
-      <div><b class="label">Window:</b> <input id="windowSize" type="text" value="30" class="shortInput"/></div>
-      <div><b class="label">Remaining:</b> <span id="remaining"></span></div>
-      <div class="totpDisplay">
+    <h2 class="title"><b>totp</b></h2>
+    <b class="leader">Time-based One-Time Password</b>
+    <div class="spacer">&nbsp;</div>
+    <div><b class="label">Issuer:</b> <input id="issuer" type="text" value="" class="longInput" /></div>
+    <div><b class="label">Account:</b> <input id="account" type="text" value="username" class="longInput" /></div>
+    <div><b class="label">Secret:</b> <input id="secret" type="text" value="" class="secretInput" /><button onclick="hashSecret()">#</button></div>
+    <div><b class="label">HMAC:</b> <select name="hmac" id="hmac">
+        <option value="SHA-1">SHA-1</option>
+        <option value="SHA-256">SHA-256</option>
+        <option value="SHA-512">SHA-512</option>
+    </select></div>
+    <div><b class="label">Length:</b> <input id="codeLen" type="text" value="6" class="shortInput"/></div>
+    <div><b class="label">Window:</b> <input id="windowSize" type="text" value="30" class="shortInput"/></div>
+    <div><b class="label">Counter:</b> <span id="counter"></span></div>
+    <div><b class="label">Remaining:</b> <span id="remaining"></span></div>
+    <div class="totpDisplay">
         <div class="totpDisplayPartLeft">
-          <span class="smaller">
+        <span class="smaller">
             prev<br/>
             <span id="prevCode">123123</span>
-          </span>
+        </span>
         </div>
         <div class="totpDisplayPartCenter">
-          <span>
+        <span>
             TOTP<br/>
             <span id="code">123123</span>
-          </span>
+        </span>
         </div>
         <div class="totpDisplayPartRight">
-          <span class="smaller">
+        <span class="smaller">
             next<br/>
             <span id="nextCode">123123</span>
-          </span>
+        </span>
         </div>
-      </div>
-      <canvas class="qrcodeCanvas" id="qrcode"></canvas>
-      <div class="spacer">&nbsp;</div>
-      <div><a id="thisurl" href=""><span id="url" class="url"></span></a></div>
-      <div class="spacer">&nbsp;</div>
-      <div class="footer">&copy; 2022 danpub1</div>
-      <div class="footer">Based on <a href="https://gist.github.com/rafaelsq/e6a84d2f9b487917115362e39032d528">https://gist.github.com/rafaelsq/e6a84d2f9b487917115362e39032d528</a></div>
-      <div class="footer">Uses <a href="https://github.com/soldair/node-qrcode">https://github.com/soldair/node-qrcode</a> (MIT)</div>
+    </div>
+    <canvas class="qrcodeCanvas" id="qrcode"></canvas>
+    <div class="spacer">&nbsp;</div>
+    <div><a id="thisurl" href=""><span id="url" class="url"></span></a></div>
+    <div class="spacer">&nbsp;</div>
+    <div class="footer">&copy; 2024 danpub1, <a href="https://github.com/danpub1/totp">repository on github</a>, 
+        <a href="https://danpub1.github.io/totp/ABOUT.md">About</a></div>
+    <div class="footer">About</div>
+    <div class="footer">Based on <a href="https://gist.github.com/rafaelsq/e6a84d2f9b487917115362e39032d528">https://gist.github.com/rafaelsq/e6a84d2f9b487917115362e39032d528</a></div>
+    <div class="footer">Uses <a href="https://github.com/soldair/node-qrcode">https://github.com/soldair/node-qrcode</a> (MIT)</div>
         <script>
 var runes = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567abcdefghijklmnopqrstuvwxyz234567'
 
 function encodeBuf(buf) {
-   var encoded = ''
-   var bitCount = buf.length * 8;
-   var ii = 0;
-   for (ii = 0; ii < bitCount; ii += 5) {
-      switch (ii % 8) {
-	     case 0: encoded += runes[((buf[Math.floor(ii / 8)] >> 3) & 0x1F)]; break; // bits 3-7
-		 case 1: encoded += runes[((buf[Math.floor(ii / 8)] >> 2) & 0x1F)]; break; // bits 2-6
-		 case 2: encoded += runes[((buf[Math.floor(ii / 8)] >> 1) & 0x1F)]; break; // bits 1-5
-		 case 3: encoded += runes[((buf[Math.floor(ii / 8)] >> 0) & 0x1F)]; break; // bits 0-4
-		 case 4: encoded += runes[((buf[Math.floor(ii / 8)] & 0x0F) << 1) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 7) & 0x01) : 0)]; break; // bits 0-3 + bit 7
-		 case 5: encoded += runes[((buf[Math.floor(ii / 8)] & 0x07) << 2) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 6) & 0x03) : 0)]; break; // bits 0-2 + bit 6-7
-		 case 6: encoded += runes[((buf[Math.floor(ii / 8)] & 0x03) << 3) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 5) & 0x07) : 0)]; break; // bits 0-1 + bit 5-7
-		 case 7: encoded += runes[((buf[Math.floor(ii / 8)] & 0x01) << 4) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 4) & 0x0F) : 0)]; break; // bit 0 + bit 4-7
-	  }
-   }
-   
-   return encoded;
+    var encoded = ''
+    var bitCount = buf.length * 8;
+    var ii = 0;
+    for (ii = 0; ii < bitCount; ii += 5) {
+        switch (ii % 8) {
+            case 0: encoded += runes[((buf[Math.floor(ii / 8)] >> 3) & 0x1F)]; break; // bits 3-7
+            case 1: encoded += runes[((buf[Math.floor(ii / 8)] >> 2) & 0x1F)]; break; // bits 2-6
+            case 2: encoded += runes[((buf[Math.floor(ii / 8)] >> 1) & 0x1F)]; break; // bits 1-5
+            case 3: encoded += runes[((buf[Math.floor(ii / 8)] >> 0) & 0x1F)]; break; // bits 0-4
+            case 4: encoded += runes[((buf[Math.floor(ii / 8)] & 0x0F) << 1) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 7) & 0x01) : 0)]; break; // bits 0-3 + bit 7
+            case 5: encoded += runes[((buf[Math.floor(ii / 8)] & 0x07) << 2) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 6) & 0x03) : 0)]; break; // bits 0-2 + bit 6-7
+            case 6: encoded += runes[((buf[Math.floor(ii / 8)] & 0x03) << 3) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 5) & 0x07) : 0)]; break; // bits 0-1 + bit 5-7
+            case 7: encoded += runes[((buf[Math.floor(ii / 8)] & 0x01) << 4) + (ii + 5 < bitCount ? ((buf[Math.floor((ii + 5) / 8)] >> 4) & 0x0F) : 0)]; break; // bit 0 + bit 4-7
+        }
+    }
+
+    return encoded;
 }
 
 function decodeBuf(encoded) {
-   var bitCount = Math.floor(encoded.length * 5 / 8) * 8;
-   var buf = new Uint8Array(bitCount / 8);
-   for (ii = 0; ii < bitCount; ii += 8) {
-      var cc = Math.floor(ii/5)
-      switch (ii % 5) {
-	     case 0: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x1F) << 3) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1C) >> 2); break; // 5 & 3
-	     case 1: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x0F) << 4) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1E) >> 1); break; // 4 & 4
-	     case 2: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x07) << 5) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1F) >> 0); break; // 3 & 5
-	     case 3: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x03) << 6) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1F) << 1) | (((runes.indexOf(encoded[cc+2]) % 32) & 0x10) >> 4); break; // 2 & 5 & 1
-	     case 4: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x01) << 7) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1F) << 2) | (((runes.indexOf(encoded[cc+2]) % 32) & 0x18) >> 3); break; // 1 & 5 & 2
-	  }
-   }
-   return buf;
+    var bitCount = Math.floor(encoded.length * 5 / 8) * 8;
+    var buf = new Uint8Array(bitCount / 8);
+    for (ii = 0; ii < bitCount; ii += 8) {
+        var cc = Math.floor(ii/5)
+        switch (ii % 5) {
+            case 0: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x1F) << 3) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1C) >> 2); break; // 5 & 3
+            case 1: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x0F) << 4) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1E) >> 1); break; // 4 & 4
+            case 2: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x07) << 5) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1F) >> 0); break; // 3 & 5
+            case 3: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x03) << 6) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1F) << 1) | (((runes.indexOf(encoded[cc+2]) % 32) & 0x10) >> 4); break; // 2 & 5 & 1
+            case 4: buf[ii/8] = (((runes.indexOf(encoded[cc]) % 32) & 0x01) << 7) | (((runes.indexOf(encoded[cc+1]) % 32) & 0x1F) << 2) | (((runes.indexOf(encoded[cc+2]) % 32) & 0x18) >> 3); break; // 1 & 5 & 2
+        }
+    }
+    return buf;
+}
+
+function decodeString(s) {
+    if (s) {
+        var byteCount = 0;
+        for (var ii = 0; ii < s.length; ii++) {
+            var code = s.charCodeAt(ii);
+            if (code <= 0x7F) {
+                byteCount += 1;
+            } else if (code <= 0xFFFF) {
+                byteCount += 2;
+            } else if (code <= 0xFFFFFF) {
+                byteCount += 3;
+            } else {
+                byteCount += 4;
+            }
+        }
+
+        var buf = new Uint8Array(byteCount);
+        var jj = 0;
+        for (var ii = 0; ii < s.length; ii++) {
+            var code = s.charCodeAt(ii);
+            if (code <= 0x7F) {
+                buf[jj++] = code;
+            } else if (code <= 0xFFFF) {
+                buf[jj++] = (code >> 8) & 0xFF;
+                buf[jj++] = (code >> 0) & 0xFF;
+            } else if (code <= 0xFFFFFF) {
+                buf[jj++] = (code >> 16) & 0xFF;
+                buf[jj++] = (code >> 8) & 0xFF;
+                buf[jj++] = (code >> 0) & 0xFF;
+            } else {
+                buf[jj++] = (code >> 24) & 0xFF;
+                buf[jj++] = (code >> 16) & 0xFF;
+                buf[jj++] = (code >> 8) & 0xFF;
+                buf[jj++] = (code >> 0) & 0xFF;
+            }
+        }
+
+        return buf;
+    }
+    else {
+        new Uint8Array(0)
+    }
 }
 
 function getCounter(s) {
-  var buf = new Uint8Array(8);
-  s = Math.floor(s)
-  buf[7] = Math.floor(s/1) & 0xFF;
-  buf[6] = Math.floor(s/256) & 0xFF;
-  buf[5] = Math.floor(s/(256*256)) & 0xFF;
-  buf[4] = Math.floor(s/(256*256*256)) & 0xFF;
-  buf[3] = Math.floor(s/(256*256*256*256)) & 0xFF;
-  buf[2] = Math.floor(s/(256*256*256*256*256)) & 0xFF;
-  buf[1] = Math.floor(s/(256*256*256*256*256*256)) & 0xFF;
-  buf[0] = Math.floor(s/(256*256*256*256*256*256*256)) & 0xFF;
-  return buf;
+    var buf = new Uint8Array(8);
+    s = Math.floor(s)
+    buf[7] = Math.floor(s/1) & 0xFF;
+    buf[6] = Math.floor(s/256) & 0xFF;
+    buf[5] = Math.floor(s/(256*256)) & 0xFF;
+    buf[4] = Math.floor(s/(256*256*256)) & 0xFF;
+    buf[3] = Math.floor(s/(256*256*256*256)) & 0xFF;
+    buf[2] = Math.floor(s/(256*256*256*256*256)) & 0xFF;
+    buf[1] = Math.floor(s/(256*256*256*256*256*256)) & 0xFF;
+    buf[0] = Math.floor(s/(256*256*256*256*256*256*256)) & 0xFF;
+    return buf;
 }
 
 function getTimeCounter(windowSize, windowOffset) {
-  const epoch = Math.round(new Date().getTime() / 1000.0)
-  return getCounter(epoch / windowSize + (windowOffset ? windowOffset : 0));
+    const epoch = Math.round(new Date().getTime() / 1000.0)
+    return getCounter(epoch / windowSize + (windowOffset ? windowOffset : 0));
+}
+
+function getTimeCounterValue(windowSize, windowOffset) {
+    const epoch = Math.round(new Date().getTime() / 1000.0)
+    return Math.floor(epoch / windowSize + (windowOffset ? windowOffset : 0));
 }
 
 function getRemaining(windowSize) {
-  const epoch = Math.round(new Date().getTime() / 1000.0)
-  return windowSize - (epoch % windowSize + 1)
+    const epoch = Math.round(new Date().getTime() / 1000.0)
+    return windowSize - (epoch % windowSize + 1)
 }
 
 async function getOTP(secret, mac, codeLen, windowSize, windowOffset) {
-  const keyData = decodeBuf(secret)
-  const data = getTimeCounter(windowSize, windowOffset)
-  
-  if (keyData.length != 0 && crypto.subtle) {
-	  const key = await crypto.subtle.importKey('raw', keyData, {name: 'HMAC', hash: mac}, false, ['sign'])
-	  const signature = await crypto.subtle.sign({name: 'HMAC', hash: mac}, key, data)
+    const keyData = decodeBuf(secret)
+    const data = getTimeCounter(windowSize, windowOffset)
 
-	  var arr = new Uint8Array(signature)
-	  var offset = arr[arr.length - 1] & 0xf
-	  var binary = ((arr[offset] & 0x7f) << 24) | ((arr[offset + 1] & 0xff) << 16) | ((arr[offset + 2] & 0xff) << 8) | (arr[offset + 3] & 0xff);
-	  return (binary % Math.pow(10, codeLen)).toString().padStart(codeLen, "0");
-  } else {
-	  return '';
-  }
+    if (keyData.length != 0 && crypto.subtle) {
+        const key = await crypto.subtle.importKey('raw', keyData, {name: 'HMAC', hash: mac}, false, ['sign'])
+        const signature = await crypto.subtle.sign({name: 'HMAC', hash: mac}, key, data)
+
+        var arr = new Uint8Array(signature)
+        var offset = arr[arr.length - 1] & 0xf
+        var binary = ((arr[offset] & 0x7f) << 24) | ((arr[offset + 1] & 0xff) << 16) | ((arr[offset + 2] & 0xff) << 8) | (arr[offset + 3] & 0xff);
+        var otp = (binary % Math.pow(10, codeLen)).toString().padStart(codeLen, "0");
+
+        if (codeLen === 8) otp = otp.substr(0, 4) + '-' + otp.substr(4, 4);
+
+        return otp;
+    } else {
+        return '';
+    }
 }
 
 function initFromUrl() {
     var url = document.URL
-	var queryParamSet = url.split('#')
-	if (queryParamSet.length == 2) {
-	    document.getElementById('secret').value = 'otpauth://totp/' + queryParamSet[1];
-		refreshSecret();
-      history.replaceState(history.state, '', queryParamSet[0]);
-	} else {
-	    generateSecret();
-	}
+    var queryParamSet = url.split('#')
+    if (queryParamSet.length == 2) {
+        document.getElementById('secret').value = 'otpauth://totp/' + queryParamSet[1];
+        refreshSecret();
+    history.replaceState(history.state, '', queryParamSet[0]);
+    } else {
+        generateSecret();
+    }
+}
+
+async function hashSecret() {
+    if (document.getElementById('secret').value) {
+        var randBytes = new Uint8Array(128/8); // 128 bits is recommended for the salt
+        const iterations = 120000;
+
+        const keyData = decodeString(document.getElementById('secret').value)
+        const pbkdf2key = await crypto.subtle.importKey('raw', keyData, {name: 'PBKDF2', hash: 'SHA-512'}, false, ['deriveBits'])
+        const keybits = await crypto.subtle.deriveBits({name: 'PBKDF2', hash: 'SHA-512', salt: randBytes, iterations: iterations}, pbkdf2key, 160)
+        document.getElementById('secret').value = encodeBuf(new Uint8Array(keybits))
+    } else {
+        generateSecret();
+    }
+    refreshSecret()
 }
 
 function generateSecret() {
-  var randBytes = new Uint8Array(20)        
-  window.crypto.getRandomValues(randBytes)
-  document.getElementById('secret').value = encodeBuf(randBytes)
+    var randBytes = new Uint8Array(20)
+    window.crypto.getRandomValues(randBytes)
+    document.getElementById('secret').value = encodeBuf(randBytes)
 }
 
 function refreshSecret() {
-  newSecret = decodeURIComponent(document.getElementById('secret').value);
-  var re = new RegExp(/^otpauth:\/\/totp\/[^?]+\?/)
-  if (re.test(newSecret)) {
-	  var allParams = newSecret.substr(re.exec(newSecret)[0].length);
-    var accountParts = newSecret.substr('otpauth://totp/'.length, newSecret.length - allParams.length - 'otpauth://totp/'.length - '?'.length).split(':');
-    var issuer = '';
-    var params = allParams.split('&');
-	  for (var ii = 0; ii < params.length; ii++) {
-		  if (params[ii].startsWith('secret=')) {
-			  document.getElementById('secret').value = params[ii].substr('secret='.length);
-		  } else if (params[ii].startsWith('algorithm=')) {
-			  var algorithm = params[ii].substr('algorithm='.length);
-			  if (algorithm === 'SHA1') {
-				  document.getElementById('hmac').value = 'SHA-1'
-			  } else if (algorithm === 'SHA256') {
-				  document.getElementById('hmac').value = 'SHA-256'
-			  } else if (algorithm === 'SHA512') {
-				  document.getElementById('hmac').value = 'SHA-512'
-			  }
-		  } else if (params[ii].startsWith('digits=')) {
-			  var digits = parseInt(params[ii].substr('digits='.length))
-			  digits = Math.max(6, Math.min(8, digits))
-			  document.getElementById('codeLen').value = digits
-		  } else if (params[ii].startsWith('period=')) {
-			  var period = parseInt(params[ii].substr('period='.length))
-			  period = Math.max(1, period)
-			  document.getElementById('windowSize').value = period
-		  } else if (params[ii].startsWith('issuer=')) {
-        issuer = params[ii].substr('issuer='.length);
-		  }
-	  }
-    if (accountParts.length === 1 && accountParts[0] === issuer) {
-      document.getElementById('issuer').value = issuer;
-      document.getElementById('account').value = '';
-    } else if (accountParts.length === 1 && accountParts[0] !== issuer) {
-      document.getElementById('issuer').value = '';
-      document.getElementById('account').value = accountParts[0];
-    } else if (accountParts.length === 2 && accountParts[0] == issuer) {
-      document.getElementById('issuer').value = issuer;
-      document.getElementById('account').value = accountParts[1];
-    } else if (accountParts.length === 2) {
-      document.getElementById('issuer').value = issuer;
-      document.getElementById('account').value = accountParts[1];
+    newSecret = decodeURIComponent(document.getElementById('secret').value);
+    var re = new RegExp(/^otpauth:\/\/totp\/[^?]+\?/)
+    if (re.test(newSecret)) {
+        var allParams = newSecret.substr(re.exec(newSecret)[0].length);
+        var accountParts = newSecret.substr('otpauth://totp/'.length, newSecret.length - allParams.length - 'otpauth://totp/'.length - '?'.length).split(':');
+        var issuer = '';
+        var params = allParams.split('&');
+        for (var ii = 0; ii < params.length; ii++) {
+            if (params[ii].startsWith('secret=')) {
+                document.getElementById('secret').value = params[ii].substr('secret='.length);
+            } else if (params[ii].startsWith('algorithm=')) {
+                var algorithm = params[ii].substr('algorithm='.length);
+                if (algorithm === 'SHA1') {
+                    document.getElementById('hmac').value = 'SHA-1'
+                } else if (algorithm === 'SHA256') {
+                    document.getElementById('hmac').value = 'SHA-256'
+                } else if (algorithm === 'SHA512') {
+                    document.getElementById('hmac').value = 'SHA-512'
+                }
+            } else if (params[ii].startsWith('digits=')) {
+                var digits = parseInt(params[ii].substr('digits='.length))
+                digits = Math.max(6, Math.min(8, digits))
+                document.getElementById('codeLen').value = digits
+            } else if (params[ii].startsWith('period=')) {
+                var period = parseInt(params[ii].substr('period='.length))
+                period = Math.max(1, period)
+                document.getElementById('windowSize').value = period
+            } else if (params[ii].startsWith('issuer=')) {
+                issuer = params[ii].substr('issuer='.length);
+            }
+        }
+        if (accountParts.length === 1 && accountParts[0] === issuer) {
+            document.getElementById('issuer').value = issuer;
+            document.getElementById('account').value = '';
+        } else if (accountParts.length === 1 && accountParts[0] !== issuer) {
+            document.getElementById('issuer').value = '';
+            document.getElementById('account').value = accountParts[0];
+        } else if (accountParts.length === 2 && accountParts[0] == issuer) {
+            document.getElementById('issuer').value = issuer;
+            document.getElementById('account').value = accountParts[1];
+        } else if (accountParts.length === 2) {
+            document.getElementById('issuer').value = issuer;
+            document.getElementById('account').value = accountParts[1];
+        } else {
+            document.getElementById('issuer').value = '';
+            document.getElementById('account').value = '';
+        }
+    } else if (!newSecret) {
+        //generateSecret();
     } else {
-      document.getElementById('issuer').value = '';
-      document.getElementById('account').value = '';
+        document.getElementById('secret').value = newSecret;
     }
-  } else if (!newSecret) {
-     generateSecret();
-  } else {
-	  document.getElementById('secret').value = newSecret;
-  }
-  refresh();
+    refresh();
 }
 
 function getSafeNumber(elementId, minVal, maxVal, defVal) {
-  var val = document.getElementById(elementId).value;
-  val = val ? Math.max(minVal, Math.min(maxVal, parseInt(val, 10))) : defVal;
-  val = val ? val : defVal;
-  return val
+    var val = document.getElementById(elementId).value;
+    val = val ? Math.max(minVal, Math.min(maxVal, parseInt(val, 10))) : defVal;
+    val = val ? val : defVal;
+return val
 }
 
 function getUrl(baseurl) {
     var url = document.URL.split('#')
-	return url[0] + '#' + baseurl;
+    return url[0] + '#' + baseurl;
 }
 
 function refresh() {
-  const windowSize = getSafeNumber('windowSize', 1, 86400, 30);
-  const codeLen = getSafeNumber('codeLen', 6, 8, 6);
-  
-  const mac = document.getElementById('hmac').value
-  
-  getOTP(document.getElementById('secret').value, mac, codeLen, windowSize, -1).then(code => {document.getElementById('prevCode').innerHTML = code}).catch(alert)
-  
-  getOTP(document.getElementById('secret').value, mac, codeLen, windowSize, 0).then(code => {document.getElementById('code').innerHTML = code}).catch(alert)
-  
-  getOTP(document.getElementById('secret').value, mac, codeLen, windowSize, 1).then(code => {document.getElementById('nextCode').innerHTML = code}).catch(alert)
-  
-  var remaining = getRemaining(windowSize)
-  document.getElementById('remaining').innerText = remaining;
-  
-  // FYI: the following characters are apparently not hex encoded: !'()*-._~
-  var issuer = encodeURIComponent(document.getElementById('issuer').value)
-  var account = encodeURIComponent(document.getElementById('account').value)
-  
-  if (issuer || account) {
-    var baseurl = (issuer && account ? issuer + ":" + account + "?issuer=" + issuer :  
-        issuer && !account ? issuer + "?issuer=" + issuer :  
-        !issuer && account ? account + "?" : "?") + 
-       (issuer ? "&" : "") + 
-       "secret=" + document.getElementById('secret').value +
-       (mac !== "SHA-1" ? "&algorithm="  + mac.replace("-", "") : "") + 
-       (codeLen !== 6 ? "&digits=" + codeLen : "") +
-       (windowSize !== 30 ? "&period=" + windowSize : "");
-     
-    document.getElementById('url').innerText = "otpauth://totp/" + baseurl;
-	if (document.URL !== getUrl(baseurl)) {
-	    document.getElementById('thisurl').href = getUrl(baseurl);
-	}
+    const windowSize = getSafeNumber('windowSize', 1, 86400, 30);
+    const codeLen = getSafeNumber('codeLen', 6, 8, 6);
 
-    QRCode.toCanvas(document.getElementById('qrcode'), "otpauth://totp/" + baseurl, /* { errorCorrectionLevel: 'L' }, */ function (error) {
-      if (error) {
-         console.error(error)
-         var canvas = document.getElementById('qrcode');
-         canvas.width = 0;
-         canvas.height = 0;
-         canvas.style.width = 0;
-         canvas.style.height = 0;
-      }
-    })
-  } else {
-    document.getElementById('url').innerText = '';
-	if (document.URL.split('#').length == 2 ) {
-	    document.getElementById('thisurl').href = document.URL.split('#')[0] + '#'
-	}
-    var canvas = document.getElementById('qrcode');
-    canvas.width = 0;
-    canvas.height = 0;
-         canvas.style.width = 0;
-         canvas.style.height = 0;
-  }
+    const mac = document.getElementById('hmac').value
+
+    getOTP(document.getElementById('secret').value, mac, codeLen, windowSize, -1).then(code => {document.getElementById('prevCode').innerHTML = code}).catch(alert)
+
+    getOTP(document.getElementById('secret').value, mac, codeLen, windowSize, 0).then(code => {document.getElementById('code').innerHTML = code}).catch(alert)
+
+    getOTP(document.getElementById('secret').value, mac, codeLen, windowSize, 1).then(code => {document.getElementById('nextCode').innerHTML = code}).catch(alert)
+
+    var remaining = getRemaining(windowSize)
+    document.getElementById('remaining').innerText = remaining;
+
+    var counter = getTimeCounterValue(windowSize, 0)
+    document.getElementById('counter').innerText = counter;
+
+    // FYI: the following characters are apparently not hex encoded: !'()*-._~
+    var issuer = encodeURIComponent(document.getElementById('issuer').value)
+    var account = encodeURIComponent(document.getElementById('account').value)
+
+    if (issuer || account) {
+        var baseurl = (issuer && account ? issuer + ":" + account + "?issuer=" + issuer :  
+            issuer && !account ? issuer + "?issuer=" + issuer :  
+            !issuer && account ? account + "?" : "?") + 
+        (issuer ? "&" : "") + 
+        "secret=" + document.getElementById('secret').value +
+        (mac !== "SHA-1" ? "&algorithm="  + mac.replace("-", "") : "") + 
+        (codeLen !== 6 ? "&digits=" + codeLen : "") +
+        (windowSize !== 30 ? "&period=" + windowSize : "");
+        
+        document.getElementById('url').innerText = "otpauth://totp/" + baseurl;
+        if (document.URL !== getUrl(baseurl)) {
+            document.getElementById('thisurl').href = getUrl(baseurl);
+        }
+
+        QRCode.toCanvas(document.getElementById('qrcode'), "otpauth://totp/" + baseurl, /* { errorCorrectionLevel: 'L' }, */ function (error) {
+            if (error) {
+                console.error(error)
+                var canvas = document.getElementById('qrcode');
+                canvas.width = 0;
+                canvas.height = 0;
+                canvas.style.width = 0;
+                canvas.style.height = 0;
+            }
+        })
+    } else {
+        document.getElementById('url').innerText = '';
+        if (document.URL.split('#').length == 2 ) {
+            document.getElementById('thisurl').href = document.URL.split('#')[0] + '#'
+        }
+        var canvas = document.getElementById('qrcode');
+        canvas.width = 0;
+        canvas.height = 0;
+        canvas.style.width = 0;
+        canvas.style.height = 0;
+    }
 }
 
 function refreshRemaining(initial) {
-  if (initial) {
-    setInterval(() => refreshRemaining(false), 1000)
-  }
-  
-  const windowSize = getSafeNumber('windowSize', 1, 86400, 30);
-  
-  var remaining = getRemaining(windowSize)
-  document.getElementById('remaining').innerText = remaining;
-  if (remaining == windowSize - 1) refresh()
+    if (initial) {
+        setInterval(() => refreshRemaining(false), 1000)
+    }
+
+    const windowSize = getSafeNumber('windowSize', 1, 86400, 30);
+
+    var remaining = getRemaining(windowSize)
+    document.getElementById('remaining').innerText = remaining;
+    if (remaining == windowSize - 1) refresh()
 }
 
 initFromUrl();
@@ -330,5 +405,5 @@ document.getElementById('hmac').addEventListener('change', e => refresh())
 setTimeout(() => refreshRemaining(true), 1000 - (new Date().getTime() % 1000))
 refresh()
         </script>
-   </body>
+</body>
 </html>
