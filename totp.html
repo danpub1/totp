@@ -210,7 +210,8 @@ async function getOTP(secret, mac, codeLen, windowSize, windowOffset) {
         var binary = ((arr[offset] & 0x7f) << 24) | ((arr[offset + 1] & 0xff) << 16) | ((arr[offset + 2] & 0xff) << 8) | (arr[offset + 3] & 0xff);
         var otp = (binary % Math.pow(10, codeLen)).toString().padStart(codeLen, "0");
 
-        if (codeLen === 8) otp = otp.substr(0, 4) + '-' + otp.substr(4, 4);
+        if (codeLen === 8) otp = otp.substr(0, 4) + '&hybull;' + otp.substr(4, 4);
+        else if (codeLen === 7) otp = otp.substr(0, 2) + '&hybull;' + otp.substr(2, 3) + '&hybull;' + otp.substr(5, 2);
 
         return otp;
     } else {
