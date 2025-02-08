@@ -58,6 +58,7 @@
     <div><b class="label">Window:</b> <input id="windowSize" type="text" value="30" maxLength="5" class="shortInput"/></div>
     <div class="text-div"><b class="label">Counter:</b> <span id="counter"></span></div>
     <div class="text-div"><b class="label">Remaining:</b> <span id="remaining"></span></div>
+    <div class="text-div"><b>Estimated Clock Offset:</b> <span id="possibleTimeOffset"></span></div>
     <div class="totpDisplay">
         <div class="totpDisplayPartLeft">
         <span class="smaller">
@@ -404,6 +405,20 @@ function refreshRemaining(initial) {
     if (remaining == windowSize - 1) refresh()
 }
 
+function possibleTimeOffset() {
+    var req = new XMLHttpRequest();
+    req.open('HEAD', document.location, false);
+    var startDate = new Date();
+    req.send(null);
+    var headerDate = req.getResponseHeader('Date')
+    var endDate = new Date();
+    var headerJsDate = new Date(headerDate)
+    var deltaReqTime = endDate.getTime() - startDate.getTime();
+    var nowJsDate = new Date()
+    var deltaS = Math.abs(Math.floor((headerJsDate.getTime() + deltaReqTime/2 - nowJsDate.getTime())/1000))
+    return deltaS + ' s'
+}
+
 initFromUrl();
 document.getElementById('issuer').addEventListener('change', e => refresh())
 document.getElementById('issuer').addEventListener('keyup', e => refresh())
@@ -416,6 +431,7 @@ document.getElementById('windowSize').addEventListener('keyup', e => refresh())
 document.getElementById('codeLen').addEventListener('change', e => refresh())
 document.getElementById('codeLen').addEventListener('keyup', e => refresh())
 document.getElementById('hmac').addEventListener('change', e => refresh())
+document.getElementById('possibleTimeOffset').innerText = possibleTimeOffset()
 setTimeout(() => refreshRemaining(true), 1000 - (new Date().getTime() % 1000))
 refresh()
         </script>
