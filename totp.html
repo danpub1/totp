@@ -382,12 +382,22 @@ function refresh() {
     }
 }
 
+var lastCounter = 0
+
 function refreshRemaining(initial) {
+    const windowSize = getSafeNumber('windowSize', 1, 86400, 30);
+
     if (initial) {
+        lastCounter = getTimeCounterValue(windowSize, 0)
         setInterval(() => refreshRemaining(false), 1000)
     }
 
-    const windowSize = getSafeNumber('windowSize', 1, 86400, 30);
+    var counter = getTimeCounterValue(windowSize, 0)
+    if (counter !== lastCounter){
+        lastCounter = counter
+        refresh()
+        return
+    }
 
     var remaining = getRemaining(windowSize)
     document.getElementById('remaining').innerText = remaining;
