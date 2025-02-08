@@ -407,6 +407,7 @@ function refreshRemaining(initial) {
 
 function possibleTimeOffset() {
     var req = new XMLHttpRequest();
+    req.setRequestHeader('max-age', '0');
     req.open('HEAD', document.location, false);
     var startDate = new Date();
     req.send(null);
