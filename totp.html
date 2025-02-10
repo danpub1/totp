@@ -237,11 +237,17 @@ function initFromUrl() {
 async function hashSecret() {
     if (document.getElementById('secret').value) {
         var randBytes = new Uint8Array(128/8); // 128 bits is recommended for the salt
-        const iterations = 120000;
+        const iterations = 210000;
+
+        const issuer = document.getElementById('issuer').value ?? '';
+        const username = document.getElementById('account').value ?? '';
+        const saltData = decodeString(issuer + '\t' + username)
+        const saltKey = await crypto.subtle.importKey('raw', saltData, {name: 'PBKDF2', hash: 'SHA-512'}, false, ['deriveBits'])
+        const saltBits = await crypto.subtle.deriveBits({name: 'PBKDF2', hash: 'SHA-512', salt: randBytes, iterations: 1}, saltKey, 128)
 
         const keyData = decodeString(document.getElementById('secret').value)
-        const pbkdf2key = await crypto.subtle.importKey('raw', keyData, {name: 'PBKDF2', hash: 'SHA-512'}, false, ['deriveBits'])
-        const keybits = await crypto.subtle.deriveBits({name: 'PBKDF2', hash: 'SHA-512', salt: randBytes, iterations: iterations}, pbkdf2key, 160)
+        const pbkdf2Key = await crypto.subtle.importKey('raw', keyData, {name: 'PBKDF2', hash: 'SHA-512'}, false, ['deriveBits'])
+        const keybits = await crypto.subtle.deriveBits({name: 'PBKDF2', hash: 'SHA-512', salt: saltBits, iterations: iterations}, pbkdf2Key, 160)
         document.getElementById('secret').value = encodeBuf(new Uint8Array(keybits))
     } else {
         generateSecret();
