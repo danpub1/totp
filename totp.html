@@ -239,9 +239,10 @@ async function hashSecret() {
         var randBytes = new Uint8Array(128/8); // 128 bits is recommended for the salt
         const iterations = 210000;
 
-        const issuer = document.getElementById('issuer').value ?? '';
-        const username = document.getElementById('account').value ?? '';
-        const saltData = decodeString(issuer + '\t' + username)
+        const issuer = document.getElementById('issuer').value || '';
+        const username = document.getElementById('account').value || '';
+        const saltText = issuer + '\t' + username;
+        const saltData = decodeString(saltText)
         const saltKey = await crypto.subtle.importKey('raw', saltData, {name: 'PBKDF2', hash: 'SHA-512'}, false, ['deriveBits'])
         const saltBits = await crypto.subtle.deriveBits({name: 'PBKDF2', hash: 'SHA-512', salt: randBytes, iterations: 1}, saltKey, 128)
 
