@@ -199,11 +199,17 @@ function getRemaining(windowSize) {
     return windowSize - (epoch % windowSize + 1)
 }
 
+function isBase32(secret)
+{
+    return new RegExp(/^[ABCDEFGHIJKLMNOPQRSTUVWXYZ234567abcdefghijklmnopqrstuvwxyz234567]+$/).test(secret);
+}
+
 async function getOTP(secret, mac, codeLen, windowSize, windowOffset) {
     const keyData = decodeBuf(secret)
     const data = getTimeCounter(windowSize, windowOffset)
 
-    if (keyData.length != 0 && crypto.subtle) {
+    // Minimum key length per HOTP is 128 bits
+    if (isBase32(secret) && keyData.length > 0 && crypto.subtle) {
         const key = await crypto.subtle.importKey('raw', keyData, {name: 'HMAC', hash: mac}, false, ['sign'])
         const signature = await crypto.subtle.sign({name: 'HMAC', hash: mac}, key, data)
 
@@ -269,9 +275,8 @@ function refreshSecret() {
     newSecret = decodeURIComponent(document.getElementById('secret').value);
     var re = new RegExp(/^otpauth:\/\/totp\/[^?]+\?/)
     if (re.test(newSecret)) {
-        var allParams = newSecret.substr(re.exec(newSecret)[0].length);
-        var accountParts = newSecret.substr('otpauth://totp/'.length, newSecret.length - allParams.length - 'otpauth://totp/'.length - '?'.length).split(':');
         var issuer = '';
+        var allParams = newSecret.substr(re.exec(newSecret)[0].length);
         var params = allParams.split('&');
         for (var ii = 0; ii < params.length; ii++) {
             if (params[ii].startsWith('secret=')) {
@@ -292,18 +297,25 @@ function refreshSecret() {
                 issuer = params[ii].substr('issuer='.length);
             }
         }
-        if (accountParts.length === 1 && accountParts[0] === issuer) {
+
+        var label = newSecret.substr('otpauth://totp/'.length, newSecret.length - allParams.length - 'otpauth://totp/'.length - '?'.length);
+        if (label.indexOf(':') >= 0) labelParts = label.split(':')
+        else if (label.indexOf('%3A') > 0) labelParts = label.split('%3A')
+        else if (label.indexOf('%3a') > 0) labelParts = label.split('%3a')
+        else labelParts = label.split(':');
+
+        if (labelParts.length === 1 && labelParts[0] === issuer) {
             document.getElementById('issuer').value = issuer;
             document.getElementById('account').value = '';
-        } else if (accountParts.length === 1 && accountParts[0] !== issuer) {
+        } else if (labelParts.length === 1 && labelParts[0] !== issuer) {
             document.getElementById('issuer').value = '';
-            document.getElementById('account').value = accountParts[0];
-        } else if (accountParts.length === 2 && accountParts[0] == issuer) {
+            document.getElementById('account').value = labelParts[0];
+        } else if (labelParts.length === 2 && labelParts[0] == issuer) {
             document.getElementById('issuer').value = issuer;
-            document.getElementById('account').value = accountParts[1];
-        } else if (accountParts.length === 2) {
+            document.getElementById('account').value = labelParts[1].trimStart();
+        } else if (labelParts.length === 2) {
             document.getElementById('issuer').value = issuer;
-            document.getElementById('account').value = accountParts[1];
+            document.getElementById('account').value = labelParts[1].trimStart();
         } else {
             document.getElementById('issuer').value = '';
             document.getElementById('account').value = '';
@@ -347,10 +359,15 @@ function refresh() {
     document.getElementById('counter').innerText = counter;
     
     // FYI: the following characters are apparently not hex encoded: !'()*-._~
-    var issuer = encodeURIComponent(document.getElementById('issuer').value)
-    var account = encodeURIComponent(document.getElementById('account').value)
+    var issuer = document.getElementById('issuer').value
+    var account = document.getElementById('account').value;
 
-    if (issuer || account) {
+    var secret = document.getElementById('secret').value
+    var keyData = decodeBuf(secret)
+
+    if ((!issuer || issuer.indexOf(':') == -1) && (!account || account.indexOf(':') == -1) && (issuer || account) && isBase32(secret) && keyData.length > 0) {
+        issuer = encodeURIComponent(issuer)
+        account = encodeURIComponent(account)
         var baseurl = (issuer && account ? issuer + ":" + account + "?issuer=" + issuer :  
             issuer && !account ? issuer + "?issuer=" + issuer :  
             !issuer && account ? account + "?" : "?") + 
